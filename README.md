@@ -82,11 +82,12 @@ rap.DecodeOptions{
 Implemented RAP entry types:
 
 * `0` class with body offset
-* `1` scalar assignment
-* `2` array assignment
+* `1` scalar assignment with float value
+* `2` array assignment with int32 value
 * `3` extern class
 * `4` delete
 * `5` array append (`+=`)
+* `6` scalar assignment with int64 value
 
 ## References
 
