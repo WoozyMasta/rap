@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning][].
 * Regression tests for array append `subtype=5` wire layout `flags -> name`
 * Binary fixture decode coverage in `codec_test.go`
 
+### Changed
+
+* Implemented fast-path in `prepareEncodeInput` for configs without enums;
+  this gave about x2.6 for `EncodeConfigAST`
+  and about x3.1 for `EncodeConfigBinDecodedAST` versus baseline.
+
 [0.1.1]: https://github.com/WoozyMasta/rap/compare/v0.1.0...v0.1.1
 
 ## [0.1.0][] - 2026-02-08

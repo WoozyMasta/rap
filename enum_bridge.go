@@ -16,6 +16,19 @@ import (
 
 // prepareEncodeInput extracts enum declarations from AST and merges them with explicit options.
 func prepareEncodeInput(file rvcfg.File, opts EncodeOptions) (rvcfg.File, []EnumEntry, error) {
+	if !hasEnumInStatements(file.Statements) {
+		if len(opts.Enums) == 0 {
+			return file, nil, nil
+		}
+
+		merged := append(make([]EnumEntry, 0, len(opts.Enums)), opts.Enums...)
+		if err := validateEnumTable(merged); err != nil {
+			return rvcfg.File{}, nil, err
+		}
+
+		return file, merged, nil
+	}
+
 	eval := newEnumEvaluator()
 
 	statements, astEnums, err := extractEnumsFromStatements(file.Statements, eval)
@@ -35,6 +48,27 @@ func prepareEncodeInput(file rvcfg.File, opts EncodeOptions) (rvcfg.File, []Enum
 	out.Statements = statements
 
 	return out, merged, nil
+}
+
+// hasEnumInStatements reports whether statement tree contains at least one enum declaration.
+func hasEnumInStatements(statements []rvcfg.Statement) bool {
+	for _, statement := range statements {
+		switch statement.Kind {
+		case rvcfg.NodeEnum:
+			return true
+
+		case rvcfg.NodeClass:
+			if statement.Class == nil {
+				continue
+			}
+
+			if hasEnumInStatements(statement.Class.Body) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // extractEnumsFromStatements removes enum statements and converts them into RAP enum entries.
