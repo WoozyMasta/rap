@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import (
@@ -11,7 +15,7 @@ import (
 // RenderOptions configures AST-to-text rendering bridge.
 type RenderOptions struct {
 	// Format configures final text normalization via rvcfg formatter.
-	Format rvcfg.FormatOptions `json:"format,omitempty" yaml:"format,omitempty"`
+	Format rvcfg.FormatOptions `json:"format,omitzero" yaml:"format,omitempty"`
 
 	// EmitEnumBlock appends synthetic enum block reconstructed from RAP enum table.
 	EmitEnumBlock bool `json:"emit_enum_block,omitempty" yaml:"emit_enum_block,omitempty"`
@@ -278,7 +282,7 @@ func renderValue(value rvcfg.Value) (string, error) {
 
 // writeIndent writes two-space indentation.
 func writeIndent(builder *strings.Builder, level int) {
-	for i := 0; i < level; i++ {
+	for range level {
 		builder.WriteString("  ")
 	}
 }

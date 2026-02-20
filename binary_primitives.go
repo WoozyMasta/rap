@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import (
@@ -76,6 +80,19 @@ func (r *binaryReader) readI32() (int32, error) {
 	value |= int32(r.data[r.off+2]) << 16
 	value |= int32(r.data[r.off+3]) << 24
 	r.off += 4
+
+	return value, nil
+}
+
+// readI64 reads little-endian int64.
+func (r *binaryReader) readI64() (int64, error) {
+	if r.off+8 > len(r.data) {
+		return 0, fmt.Errorf("%w: read i64 out of bounds at %d", ErrInvalidRAP, r.off)
+	}
+
+	//nolint:gosec // preserve signed two's-complement bit pattern from RAP payload
+	value := int64(binary.LittleEndian.Uint64(r.data[r.off : r.off+8]))
+	r.off += 8
 
 	return value, nil
 }
@@ -177,10 +194,18 @@ func (w *binaryWriter) writeU32(value uint32) {
 
 // writeI32 appends little-endian int32.
 func (w *binaryWriter) writeI32(value int32) {
-	w.writeByte(byte(value))
-	w.writeByte(byte(value >> 8))
-	w.writeByte(byte(value >> 16))
-	w.writeByte(byte(value >> 24))
+	var tmp [4]byte
+	//nolint:gosec // preserve signed two's-complement bit pattern into RAP payload
+	binary.LittleEndian.PutUint32(tmp[:], uint32(value))
+	w.buf = append(w.buf, tmp[:]...)
+}
+
+// writeI64 appends little-endian int64.
+func (w *binaryWriter) writeI64(value int64) {
+	var tmp [8]byte
+	//nolint:gosec // preserve signed two's-complement bit pattern into RAP payload
+	binary.LittleEndian.PutUint64(tmp[:], uint64(value))
+	w.buf = append(w.buf, tmp[:]...)
 }
 
 // writeF32 appends little-endian float32.
@@ -204,10 +229,10 @@ func (w *binaryWriter) patchU32Int(at int, value int) error {
 		return fmt.Errorf("%w: patch u32 value out of range=%d", ErrInvalidRAP, value)
 	}
 
-	w.buf[at] = byte(value)
-	w.buf[at+1] = byte(value >> 8)
-	w.buf[at+2] = byte(value >> 16)
-	w.buf[at+3] = byte(value >> 24)
+	var tmp [4]byte
+	//nolint:gosec // value range is validated against uint32 bounds above
+	binary.LittleEndian.PutUint32(tmp[:], uint32(value))
+	copy(w.buf[at:at+4], tmp[:])
 
 	return nil
 }

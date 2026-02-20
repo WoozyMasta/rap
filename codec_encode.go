@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import (
@@ -177,7 +181,7 @@ func estimateClassBodyBinarySize(base string, statements []rvcfg.Statement) int 
 				continue
 			}
 
-			// Entry type + name cstring + optional flags u32 + payload.
+			// Entry type + optional flags u32 + name cstring + payload.
 			size += 1 + len(statement.ArrayAssign.Name) + 1
 			if statement.ArrayAssign.Append {
 				size += 4
@@ -240,7 +244,18 @@ func estimateScalarBinarySize(value rvcfg.Value) int {
 	}
 
 	// Numeric wire payloads are fixed-width.
-	if looksIntegerLikeRaw(raw) || looksFloatRaw(raw) {
+	if looksIntegerLikeRaw(raw) {
+		intValue, err := strconv.ParseInt(raw, 10, 64)
+		if err == nil {
+			if intValue >= -2147483648 && intValue <= 2147483647 {
+				return 1 + 4
+			}
+
+			return 1 + 8
+		}
+	}
+
+	if looksFloatRaw(raw) {
 		return 1 + 4
 	}
 
@@ -454,14 +469,17 @@ func (e *encodeContext) encodeScalarProperty(property rvcfg.PropertyAssign) erro
 	e.writer.writeCString(property.Name)
 
 	switch subType {
-	case 0, 4:
+	case 0, 4: // string, variable-like
 		e.writer.writeCString(scalarData.stringValue)
 
-	case 1:
+	case 1: // float
 		e.writer.writeF32(scalarData.floatValue)
 
-	case 2:
+	case 2: // int32
 		e.writer.writeI32(scalarData.intValue)
+
+	case 6: // int64
+		e.writer.writeI64(scalarData.int64Value)
 
 	default:
 		return fmt.Errorf("%w: unsupported scalar subtype=%d", ErrUnsupportedScalar, subType)
@@ -478,10 +496,10 @@ func (e *encodeContext) encodeArrayAssign(assign rvcfg.ArrayAssign) error {
 	}
 
 	e.writer.writeByte(entryType)
-	e.writer.writeCString(assign.Name)
 	if assign.Append {
 		e.writer.writeU32(1)
 	}
+	e.writer.writeCString(assign.Name)
 
 	return e.encodeArrayValue(assign.Value)
 }
@@ -513,12 +531,18 @@ func (e *encodeContext) encodeArrayValue(value rvcfg.Value) error {
 
 		e.writer.writeByte(subType)
 		switch subType {
-		case 0, 4:
+		case 0, 4: // string, variable-like
 			e.writer.writeCString(scalarData.stringValue)
-		case 1:
+
+		case 1: // float
 			e.writer.writeF32(scalarData.floatValue)
-		case 2:
+
+		case 2: // int32
 			e.writer.writeI32(scalarData.intValue)
+
+		case 6: // int64
+			e.writer.writeI64(scalarData.int64Value)
+
 		default:
 			return fmt.Errorf("%w: unsupported array scalar subtype=%d", ErrUnsupportedScalar, subType)
 		}
@@ -562,6 +586,7 @@ type scalarEncoding struct {
 	stringValue string
 	floatValue  float32
 	intValue    int32
+	int64Value  int64
 }
 
 // classifyScalarRawTrimmed maps trimmed raw scalar text to RAP subtype.
@@ -582,8 +607,12 @@ func classifyScalarRawTrimmed(raw string) (byte, scalarEncoding, error) {
 		}
 	}
 
-	if intValue, err := strconv.ParseInt(raw, 10, 32); err == nil {
-		return 2, scalarEncoding{intValue: int32(intValue)}, nil
+	if intValue, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		if intValue >= -2147483648 && intValue <= 2147483647 {
+			return 2, scalarEncoding{intValue: int32(intValue)}, nil
+		}
+
+		return 6, scalarEncoding{int64Value: intValue}, nil
 	}
 
 	if looksFloatRaw(raw) {

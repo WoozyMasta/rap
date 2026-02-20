@@ -2,6 +2,7 @@ package rap
 
 import (
 	"errors"
+	"os"
 	"reflect"
 	"testing"
 
@@ -160,6 +161,7 @@ func TestDecodeToAST_GeneratedFixtures(t *testing.T) {
 
 	paths := []string{
 		testDataPath("cases", "basic", "config.cpp"),
+		testDataPath("cases", "basic", "int64_append.cpp"),
 		testDataPath("cases", "byteparity", "class_with_array.cpp"),
 	}
 
@@ -187,5 +189,234 @@ func TestDecodeToAST_GeneratedFixtures(t *testing.T) {
 				t.Fatalf("DecodeToAST(%s) produced empty root statements", path)
 			}
 		})
+	}
+}
+
+func TestDecodeToAST_BinaryFixture_AppendFlagsAndInt64(t *testing.T) {
+	t.Parallel()
+
+	path := testDataPath("cases", "basic", "append_i64_flags_first.bin")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) error: %v", path, err)
+	}
+
+	got, err := DecodeToAST(data, DecodeOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToAST(%s) error: %v", path, err)
+	}
+
+	if len(got.Statements) != 2 {
+		t.Fatalf("expected two root statements, got=%d", len(got.Statements))
+	}
+
+	appendStmt := got.Statements[0]
+	if appendStmt.Kind != rvcfg.NodeArrayAssign || appendStmt.ArrayAssign == nil {
+		t.Fatalf("expected first statement as array append, got kind=%v", appendStmt.Kind)
+	}
+
+	if !appendStmt.ArrayAssign.Append {
+		t.Fatal("expected first statement with append mode")
+	}
+
+	if appendStmt.ArrayAssign.Name != "voices" {
+		t.Fatalf("expected append target voices, got=%q", appendStmt.ArrayAssign.Name)
+	}
+
+	if appendStmt.ArrayAssign.Value.Kind != rvcfg.ValueArray {
+		t.Fatalf("expected append value array kind, got=%v", appendStmt.ArrayAssign.Value.Kind)
+	}
+
+	if len(appendStmt.ArrayAssign.Value.Elements) != 1 {
+		t.Fatalf("expected one append array element, got=%d", len(appendStmt.ArrayAssign.Value.Elements))
+	}
+
+	if appendStmt.ArrayAssign.Value.Elements[0].Raw != `"Male01"` {
+		t.Fatalf("expected append element \"Male01\", got=%q", appendStmt.ArrayAssign.Value.Elements[0].Raw)
+	}
+
+	propStmt := got.Statements[1]
+	if propStmt.Kind != rvcfg.NodeProperty || propStmt.Property == nil {
+		t.Fatalf("expected second statement as property, got kind=%v", propStmt.Kind)
+	}
+
+	if propStmt.Property.Name != "speed" {
+		t.Fatalf("expected property name speed, got=%q", propStmt.Property.Name)
+	}
+
+	if propStmt.Property.Value.Raw != "10000000000" {
+		t.Fatalf("expected int64 scalar raw 10000000000, got=%q", propStmt.Property.Value.Raw)
+	}
+}
+
+func TestEncodeAST_ArrayAppendWireOrder(t *testing.T) {
+	t.Parallel()
+
+	input := rvcfg.File{
+		Statements: []rvcfg.Statement{
+			{
+				Kind: rvcfg.NodeArrayAssign,
+				ArrayAssign: &rvcfg.ArrayAssign{
+					Name:   "voices",
+					Append: true,
+					Value: rvcfg.Value{
+						Kind: rvcfg.ValueArray,
+						Elements: []rvcfg.Value{
+							{Kind: rvcfg.ValueScalar, Raw: `"Male01"`},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	data, err := EncodeAST(input, EncodeOptions{})
+	if err != nil {
+		t.Fatalf("EncodeAST() error: %v", err)
+	}
+
+	reader := newBinaryReader(data)
+	for i := 0; i < 16; i++ {
+		if _, readErr := reader.readByte(); readErr != nil {
+			t.Fatalf("header read failed: %v", readErr)
+		}
+	}
+
+	if _, err := reader.readCString(); err != nil {
+		t.Fatalf("read root base: %v", err)
+	}
+
+	count, err := reader.readCompressedInt()
+	if err != nil {
+		t.Fatalf("read root entry count: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("expected one root entry, got=%d", count)
+	}
+
+	entryType, err := reader.readByte()
+	if err != nil {
+		t.Fatalf("read entry type: %v", err)
+	}
+
+	if entryType != 5 {
+		t.Fatalf("expected append entry type=5, got=%d", entryType)
+	}
+
+	flags, err := reader.readU32()
+	if err != nil {
+		t.Fatalf("read append flags: %v", err)
+	}
+
+	if flags != 1 {
+		t.Fatalf("expected append flags=1, got=%d", flags)
+	}
+
+	name, err := reader.readCString()
+	if err != nil {
+		t.Fatalf("read property name: %v", err)
+	}
+
+	if name != "voices" {
+		t.Fatalf("expected append property name=voices, got=%q", name)
+	}
+}
+
+func TestEncodeDecode_Int64ScalarSubtype(t *testing.T) {
+	t.Parallel()
+
+	input := rvcfg.File{
+		Statements: []rvcfg.Statement{
+			{
+				Kind: rvcfg.NodeProperty,
+				Property: &rvcfg.PropertyAssign{
+					Name: "speed",
+					Value: rvcfg.Value{
+						Kind: rvcfg.ValueScalar,
+						Raw:  "10000000000",
+					},
+				},
+			},
+		},
+	}
+
+	data, err := EncodeAST(input, EncodeOptions{})
+	if err != nil {
+		t.Fatalf("EncodeAST() error: %v", err)
+	}
+
+	reader := newBinaryReader(data)
+	for i := 0; i < 16; i++ {
+		if _, readErr := reader.readByte(); readErr != nil {
+			t.Fatalf("header read failed: %v", readErr)
+		}
+	}
+
+	if _, err := reader.readCString(); err != nil {
+		t.Fatalf("read root base: %v", err)
+	}
+
+	count, err := reader.readCompressedInt()
+	if err != nil {
+		t.Fatalf("read root entry count: %v", err)
+	}
+
+	if count != 1 {
+		t.Fatalf("expected one root entry, got=%d", count)
+	}
+
+	entryType, err := reader.readByte()
+	if err != nil {
+		t.Fatalf("read entry type: %v", err)
+	}
+
+	if entryType != 1 {
+		t.Fatalf("expected scalar entry type=1, got=%d", entryType)
+	}
+
+	subType, err := reader.readByte()
+	if err != nil {
+		t.Fatalf("read scalar subtype: %v", err)
+	}
+
+	if subType != 6 {
+		t.Fatalf("expected scalar subtype=6 for int64, got=%d", subType)
+	}
+
+	name, err := reader.readCString()
+	if err != nil {
+		t.Fatalf("read property name: %v", err)
+	}
+
+	if name != "speed" {
+		t.Fatalf("expected property name=speed, got=%q", name)
+	}
+
+	value, err := reader.readI64()
+	if err != nil {
+		t.Fatalf("read i64 value: %v", err)
+	}
+
+	if value != 10000000000 {
+		t.Fatalf("expected int64 payload=10000000000, got=%d", value)
+	}
+
+	decoded, err := DecodeToAST(data, DecodeOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToAST() error: %v", err)
+	}
+
+	if len(decoded.Statements) != 1 {
+		t.Fatalf("expected one decoded statement, got=%d", len(decoded.Statements))
+	}
+
+	got := decoded.Statements[0]
+	if got.Property == nil {
+		t.Fatal("expected decoded property statement")
+	}
+
+	if got.Property.Value.Raw != "10000000000" {
+		t.Fatalf("expected decoded raw int64 scalar, got=%q", got.Property.Value.Raw)
 	}
 }

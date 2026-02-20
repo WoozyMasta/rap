@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import "github.com/woozymasta/rvcfg"

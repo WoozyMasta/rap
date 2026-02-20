@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import (
@@ -26,10 +30,7 @@ type decodedClassBody struct {
 
 // decodeFile decodes RAP bytes into rvcfg AST.
 func decodeFile(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error) {
-	estimatedBodies := len(data) / 512
-	if estimatedBodies < 4 {
-		estimatedBodies = 4
-	}
+	estimatedBodies := max(len(data)/512, 4)
 
 	ctx := &decodeContext{
 		reader:                newBinaryReader(data),
@@ -143,7 +144,7 @@ func (d *decodeContext) decodeEnumTable(count uint32) ([]EnumEntry, error) {
 	}
 
 	out := make([]EnumEntry, 0, count)
-	for i := uint32(0); i < count; i++ {
+	for range count {
 		name, err := d.reader.readCString()
 		if err != nil {
 			return nil, err
@@ -196,7 +197,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 	}
 
 	statements := make([]rvcfg.Statement, 0, entryCount)
-	for i := 0; i < entryCount; i++ {
+	for i := range entryCount {
 		entryType, entryErr := d.reader.readByte()
 		if entryErr != nil {
 			return decodedClassBody{}, entryErr
@@ -351,19 +352,50 @@ func (d *decodeContext) decodeScalarEntry() (rvcfg.Statement, error) {
 
 // decodeArrayEntry decodes array assignment entry type=2 or type=5.
 func (d *decodeContext) decodeArrayEntry(withFlags bool) (rvcfg.Statement, error) {
-	name, err := d.reader.readCString()
-	if err != nil {
-		return rvcfg.Statement{}, err
-	}
-
+	var (
+		name string
+		err  error
+	)
 	appendMode := false
 	if withFlags {
+		// BI RAP v1 stores array append entry type=5 as:
+		// flags u32, name cstring, value array.
+		// Keep legacy fallback for older rap encoder outputs that used name-first order.
+		saved := d.reader.pos()
 		flags, flagsErr := d.reader.readU32()
 		if flagsErr != nil {
 			return rvcfg.Statement{}, flagsErr
 		}
 
-		appendMode = flags&0x01 != 0
+		if flags <= 1 {
+			name, err = d.reader.readCString()
+			if err != nil {
+				return rvcfg.Statement{}, err
+			}
+
+			appendMode = flags&0x01 != 0
+		} else {
+			if seekErr := d.reader.seekAbsolute(saved); seekErr != nil {
+				return rvcfg.Statement{}, seekErr
+			}
+
+			name, err = d.reader.readCString()
+			if err != nil {
+				return rvcfg.Statement{}, err
+			}
+
+			flags, flagsErr = d.reader.readU32()
+			if flagsErr != nil {
+				return rvcfg.Statement{}, flagsErr
+			}
+
+			appendMode = flags&0x01 != 0
+		}
+	} else {
+		name, err = d.reader.readCString()
+		if err != nil {
+			return rvcfg.Statement{}, err
+		}
 	}
 
 	value, err := d.decodeArrayValue()
@@ -389,14 +421,14 @@ func (d *decodeContext) decodeArrayValue() (rvcfg.Value, error) {
 	}
 
 	elements := make([]rvcfg.Value, 0, count)
-	for i := 0; i < count; i++ {
+	for range count {
 		elemType, elemErr := d.reader.readByte()
 		if elemErr != nil {
 			return rvcfg.Value{}, elemErr
 		}
 
 		switch elemType {
-		case 0, 1, 2, 4:
+		case 0, 1, 2, 4, 6:
 			raw, rawErr := d.decodeScalarRawBySubtype(elemType)
 			if rawErr != nil {
 				return rvcfg.Value{}, rawErr
@@ -416,7 +448,12 @@ func (d *decodeContext) decodeArrayValue() (rvcfg.Value, error) {
 			elements = append(elements, nested)
 
 		default:
-			return rvcfg.Value{}, fmt.Errorf("%w: unsupported array element subtype=%d", ErrInvalidRAP, elemType)
+			return rvcfg.Value{}, fmt.Errorf(
+				"%w: unsupported array element subtype=%d at offset=%d",
+				ErrInvalidRAP,
+				elemType,
+				d.reader.pos()-1,
+			)
 		}
 	}
 
@@ -429,7 +466,7 @@ func (d *decodeContext) decodeArrayValue() (rvcfg.Value, error) {
 // decodeScalarRawBySubtype maps RAP scalar subtype to rvcfg scalar raw text.
 func (d *decodeContext) decodeScalarRawBySubtype(subType byte) (string, error) {
 	switch subType {
-	case 0:
+	case 0: // string
 		value, err := d.reader.readCString()
 		if err != nil {
 			return "", err
@@ -437,7 +474,7 @@ func (d *decodeContext) decodeScalarRawBySubtype(subType byte) (string, error) {
 
 		return quoteRVCfgString(value), nil
 
-	case 1:
+	case 1: // float
 		value, err := d.reader.readF32()
 		if err != nil {
 			return "", err
@@ -449,7 +486,7 @@ func (d *decodeContext) decodeScalarRawBySubtype(subType byte) (string, error) {
 
 		return formatFloat32RawNormalized(value), nil
 
-	case 2:
+	case 2: // int32
 		value, err := d.reader.readI32()
 		if err != nil {
 			return "", err
@@ -457,7 +494,7 @@ func (d *decodeContext) decodeScalarRawBySubtype(subType byte) (string, error) {
 
 		return strconv.FormatInt(int64(value), 10), nil
 
-	case 4:
+	case 4: // variable-like
 		value, err := d.reader.readCString()
 		if err != nil {
 			return "", err
@@ -467,7 +504,14 @@ func (d *decodeContext) decodeScalarRawBySubtype(subType byte) (string, error) {
 		// RAP subtype=4 is legacy/rare for Arma/DayZ corpuses.
 		return quoteRVCfgString(strings.TrimSpace(value)), nil
 
+	case 6: // int64
+		value, err := d.reader.readI64()
+		if err != nil {
+			return "", err
+		}
+		return strconv.FormatInt(value, 10), nil
+
 	default:
-		return "", fmt.Errorf("%w: unsupported scalar subtype=%d", ErrInvalidRAP, subType)
+		return "", fmt.Errorf("%w: unsupported scalar subtype=%d at offset=%d", ErrInvalidRAP, subType, d.reader.pos()-1)
 	}
 }

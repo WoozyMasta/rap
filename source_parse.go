@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import "github.com/woozymasta/rvcfg"
@@ -5,16 +9,16 @@ import "github.com/woozymasta/rvcfg"
 // SourceParseOptions configures text source parse pipeline delegated to rvcfg.
 type SourceParseOptions struct {
 	// Preprocess configures include/macro processing.
-	Preprocess rvcfg.PreprocessOptions `json:"preprocess,omitempty" yaml:"preprocess,omitempty"`
+	Preprocess rvcfg.PreprocessOptions `json:"preprocess,omitzero" yaml:"preprocess,omitempty"`
 
 	// Parse configures parser behavior for processed text.
-	Parse rvcfg.ParseOptions `json:"parse,omitempty" yaml:"parse,omitempty"`
+	Parse rvcfg.ParseOptions `json:"parse,omitzero" yaml:"parse,omitempty"`
 }
 
 // SourceParseResult stores source parse pipeline output.
 type SourceParseResult struct {
 	// Processed keeps preprocess+parse result from rvcfg.
-	Processed rvcfg.ProcessAndParseResult `json:"processed,omitempty" yaml:"processed,omitempty"`
+	Processed rvcfg.ProcessAndParseResult `json:"processed,omitzero" yaml:"processed,omitempty"`
 }
 
 // RecommendedSourceParseOptions returns RAP-oriented defaults for source parsing.

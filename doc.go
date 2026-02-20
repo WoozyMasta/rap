@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 /*
 Package rap implements RAP binary codec for DayZ/ArmA config-like data.
 

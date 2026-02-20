@@ -1,6 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 WoozyMasta
+// Source: github.com/woozymasta/rap
+
 package rap
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -236,7 +241,7 @@ func (p *enumExprParser) parseShift() (int64, error) {
 				return 0, fmt.Errorf("shift amount out of range=%d", right)
 			}
 
-			left = left << uint(right)
+			left <<= uint(right)
 
 			continue
 		}
@@ -251,7 +256,7 @@ func (p *enumExprParser) parseShift() (int64, error) {
 				return 0, fmt.Errorf("shift amount out of range=%d", right)
 			}
 
-			left = left >> uint(right)
+			left >>= uint(right)
 
 			continue
 		}
@@ -318,7 +323,7 @@ func (p *enumExprParser) parseUnary() (int64, error) {
 func (p *enumExprParser) parsePrimary() (int64, error) {
 	p.skipSpaces()
 	if p.eof() {
-		return 0, fmt.Errorf("expected value")
+		return 0, errors.New("expected value")
 	}
 
 	if p.match('(') {
@@ -329,7 +334,7 @@ func (p *enumExprParser) parsePrimary() (int64, error) {
 
 		p.skipSpaces()
 		if !p.match(')') {
-			return 0, fmt.Errorf("expected ')'")
+			return 0, errors.New("expected ')'")
 		}
 
 		return value, nil
