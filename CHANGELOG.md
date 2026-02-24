@@ -13,6 +13,16 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.2][] - 2026-02-25
+
+### Changed
+
+* Fixed RAP decode for payloads with broken `offsetToEnums` header field:
+  decoder now applies safe enum-footer fallback instead of failing hard with
+  `enums offset out of range`
+
+[0.1.2]: https://github.com/WoozyMasta/rap/compare/v0.1.1...v0.1.2
+
 ## [0.1.1][] - 2026-02-20
 
 ### Added
