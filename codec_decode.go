@@ -26,6 +26,7 @@ type decodeContext struct {
 type decodedClassBody struct {
 	base       string
 	statements []rvcfg.Statement
+	endOffset  int
 }
 
 // decodeFile decodes RAP bytes into rvcfg AST.
@@ -91,39 +92,24 @@ func decodeFile(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error
 	}
 	ctx.enumOffset = offsetToEnums
 
-	offsetToEnumsInt, err := u32ToInt(offsetToEnums)
-	if err != nil {
-		return rvcfg.File{}, nil, err
-	}
-
-	if offsetToEnumsInt > len(data) {
-		return rvcfg.File{}, nil, fmt.Errorf("%w: enums offset out of range=%d", ErrInvalidRAP, offsetToEnums)
-	}
-
 	root, err := ctx.decodeClassBodyAt(16)
 	if err != nil {
 		return rvcfg.File{}, nil, err
 	}
 
-	if err := ctx.reader.seekAbsolute(offsetToEnumsInt); err != nil {
-		return rvcfg.File{}, nil, err
-	}
-
-	firstFooterValue, err := ctx.reader.readU32()
+	offsetToEnumsInt, err := u32ToInt(offsetToEnums)
 	if err != nil {
 		return rvcfg.File{}, nil, err
 	}
 
-	enumCount := firstFooterValue
-	// BI shape keeps redundant u32 offset as first footer field.
-	if firstFooterValue == offsetToEnums {
-		enumCount, err = ctx.reader.readU32()
-		if err != nil {
-			return rvcfg.File{}, nil, err
-		}
+	enumFooterOffset := offsetToEnumsInt
+	enumFooterFallback := false
+	if offsetToEnumsInt > len(data) {
+		enumFooterOffset = root.endOffset
+		enumFooterFallback = true
 	}
 
-	enums, err := ctx.decodeEnumTable(enumCount)
+	enums, err := ctx.decodeEnumFooterAt(enumFooterOffset, offsetToEnums, enumFooterFallback)
 	if err != nil {
 		return rvcfg.File{}, nil, err
 	}
@@ -131,6 +117,50 @@ func decodeFile(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error
 	return rvcfg.File{
 		Statements: root.statements,
 	}, enums, nil
+}
+
+// decodeEnumFooterAt reads enum footer at provided offset.
+func (d *decodeContext) decodeEnumFooterAt(
+	enumFooterOffset int,
+	headerEnumOffset uint32,
+	fallback bool,
+) ([]EnumEntry, error) {
+	if enumFooterOffset >= len(d.reader.data) {
+		return nil, nil
+	}
+
+	if err := d.reader.seekAbsolute(enumFooterOffset); err != nil {
+		return nil, err
+	}
+
+	firstFooterValue, err := d.reader.readU32()
+	if err != nil {
+		if fallback {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	enumCount := firstFooterValue
+	// BI shape keeps redundant u32 offset as first footer field.
+	if firstFooterValue == headerEnumOffset {
+		enumCount, err = d.reader.readU32()
+		if err != nil {
+			if fallback {
+				return nil, nil
+			}
+
+			return nil, err
+		}
+	}
+
+	enums, err := d.decodeEnumTable(enumCount)
+	if err != nil && fallback {
+		return nil, nil
+	}
+
+	return enums, err
 }
 
 // decodeEnumTable reads enum table entries.
@@ -271,6 +301,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 	out := decodedClassBody{
 		base:       base,
 		statements: statements,
+		endOffset:  d.reader.pos(),
 	}
 
 	d.bodyMemo[offset] = out

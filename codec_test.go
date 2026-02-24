@@ -4,9 +4,15 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/woozymasta/rvcfg"
+)
+
+const (
+	brokenEnumOffsetBinPath  = "bin/broken_enum_offset.rvmat"
+	brokenEnumOffsetTextPath = "broken_enum_offset.rvmat"
 )
 
 func TestEncodeDecodeRoundTrip_MinimalAST(t *testing.T) {
@@ -195,7 +201,7 @@ func TestDecodeToAST_GeneratedFixtures(t *testing.T) {
 func TestDecodeToAST_BinaryFixture_AppendFlagsAndInt64(t *testing.T) {
 	t.Parallel()
 
-	path := testDataPath("cases", "basic", "append_i64_flags_first.bin")
+	path := testDataPath("cases", "basic", "bin", "append_i64_flags_first.bin")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("os.ReadFile(%s) error: %v", path, err)
@@ -246,6 +252,63 @@ func TestDecodeToAST_BinaryFixture_AppendFlagsAndInt64(t *testing.T) {
 
 	if propStmt.Property.Value.Raw != "10000000000" {
 		t.Fatalf("expected int64 scalar raw 10000000000, got=%q", propStmt.Property.Value.Raw)
+	}
+}
+
+func TestDecodeToAST_FixtureWithBrokenEnumOffset(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(testDataPath("cases", "compat", brokenEnumOffsetBinPath))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) error: %v", brokenEnumOffsetBinPath, err)
+	}
+
+	file, err := DecodeToAST(data, DecodeOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToAST(%s) error: %v", brokenEnumOffsetBinPath, err)
+	}
+
+	if len(file.Statements) != 1 {
+		t.Fatalf("expected one statement, got=%d", len(file.Statements))
+	}
+
+	statement := file.Statements[0]
+	if statement.Kind != rvcfg.NodeProperty || statement.Property == nil {
+		t.Fatalf("expected property statement, got kind=%v", statement.Kind)
+	}
+
+	if statement.Property.Name != "specularPower" {
+		t.Fatalf("expected property name specularPower, got=%q", statement.Property.Name)
+	}
+
+	if statement.Property.Value.Raw != "0" {
+		t.Fatalf("expected property value raw=0, got=%q", statement.Property.Value.Raw)
+	}
+}
+
+func TestDecodeToText_FixtureWithBrokenEnumOffset(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile(testDataPath("cases", "compat", brokenEnumOffsetBinPath))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) error: %v", brokenEnumOffsetBinPath, err)
+	}
+
+	text, err := DecodeToText(data, DecodeOptions{}, RenderOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToText(%s) error: %v", brokenEnumOffsetBinPath, err)
+	}
+
+	expectedTextBytes, err := os.ReadFile(testDataPath("cases", "compat", brokenEnumOffsetTextPath))
+	if err != nil {
+		t.Fatalf("os.ReadFile(%s) error: %v", brokenEnumOffsetTextPath, err)
+	}
+
+	got := strings.TrimSpace(string(text))
+	expected := strings.TrimSpace(string(expectedTextBytes))
+	normalize := strings.NewReplacer(" ", "", "\t", "", "\r", "", "\n", "").Replace
+	if normalize(got) != normalize(expected) {
+		t.Fatalf("decoded text mismatch:\n got=%q\nwant=%q", got, expected)
 	}
 }
 
