@@ -26,7 +26,6 @@ type decodeContext struct {
 type decodedClassBody struct {
 	base       string
 	statements []rvcfg.Statement
-	endOffset  int
 }
 
 // decodeFile decodes RAP bytes into rvcfg AST.
@@ -92,24 +91,39 @@ func decodeFile(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error
 	}
 	ctx.enumOffset = offsetToEnums
 
-	root, err := ctx.decodeClassBodyAt(16)
-	if err != nil {
-		return rvcfg.File{}, nil, err
-	}
-
 	offsetToEnumsInt, err := u32ToInt(offsetToEnums)
 	if err != nil {
 		return rvcfg.File{}, nil, err
 	}
 
+	var (
+		root     decodedClassBody
+		rootEnd  int
+		fallback bool
+	)
+
 	enumFooterOffset := offsetToEnumsInt
-	enumFooterFallback := false
 	if offsetToEnumsInt > len(data) {
-		enumFooterOffset = root.endOffset
-		enumFooterFallback = true
+		fallback = true
+		root, rootEnd, err = ctx.decodeClassBodyAtWithEnd(16)
+		if err != nil {
+			return rvcfg.File{}, nil, err
+		}
+
+		enumFooterOffset = rootEnd
+	} else {
+		root, err = ctx.decodeClassBodyAt(16)
+		if err != nil {
+			return rvcfg.File{}, nil, err
+		}
 	}
 
-	enums, err := ctx.decodeEnumFooterAt(enumFooterOffset, offsetToEnums, enumFooterFallback)
+	var enums []EnumEntry
+	if fallback {
+		enums, err = ctx.decodeEnumFooterFallbackAt(enumFooterOffset, offsetToEnums)
+	} else {
+		enums, err = ctx.decodeEnumFooterStrictAt(enumFooterOffset, offsetToEnums)
+	}
 	if err != nil {
 		return rvcfg.File{}, nil, err
 	}
@@ -119,12 +133,8 @@ func decodeFile(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error
 	}, enums, nil
 }
 
-// decodeEnumFooterAt reads enum footer at provided offset.
-func (d *decodeContext) decodeEnumFooterAt(
-	enumFooterOffset int,
-	headerEnumOffset uint32,
-	fallback bool,
-) ([]EnumEntry, error) {
+// decodeEnumFooterStrictAt reads enum footer in strict mode.
+func (d *decodeContext) decodeEnumFooterStrictAt(enumFooterOffset int, headerEnumOffset uint32) ([]EnumEntry, error) {
 	if enumFooterOffset >= len(d.reader.data) {
 		return nil, nil
 	}
@@ -135,10 +145,6 @@ func (d *decodeContext) decodeEnumFooterAt(
 
 	firstFooterValue, err := d.reader.readU32()
 	if err != nil {
-		if fallback {
-			return nil, nil
-		}
-
 		return nil, err
 	}
 
@@ -147,20 +153,37 @@ func (d *decodeContext) decodeEnumFooterAt(
 	if firstFooterValue == headerEnumOffset {
 		enumCount, err = d.reader.readU32()
 		if err != nil {
-			if fallback {
-				return nil, nil
-			}
-
 			return nil, err
 		}
 	}
 
-	enums, err := d.decodeEnumTable(enumCount)
-	if err != nil && fallback {
+	return d.decodeEnumTable(enumCount)
+}
+
+// decodeEnumFooterFallbackAt reads enum footer for malformed header offset cases.
+func (d *decodeContext) decodeEnumFooterFallbackAt(enumFooterOffset int, headerEnumOffset uint32) ([]EnumEntry, error) {
+	if enumFooterOffset >= len(d.reader.data) {
 		return nil, nil
 	}
 
-	return enums, err
+	if err := d.reader.seekAbsolute(enumFooterOffset); err != nil {
+		return nil, err
+	}
+
+	firstFooterValue, readErr := d.reader.readU32()
+	enumCount := firstFooterValue
+	if readErr == nil && firstFooterValue == headerEnumOffset {
+		enumCount, readErr = d.reader.readU32()
+	}
+
+	if readErr == nil {
+		enums, decodeErr := d.decodeEnumTable(enumCount)
+		if decodeErr == nil {
+			return enums, nil
+		}
+	}
+
+	return nil, nil
 }
 
 // decodeEnumTable reads enum table entries.
@@ -196,12 +219,23 @@ func (d *decodeContext) decodeEnumTable(count uint32) ([]EnumEntry, error) {
 
 // decodeClassBodyAt decodes class body from absolute offset.
 func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) {
+	body, _, err := d.decodeClassBodyAtInternal(offset, false)
+	return body, err
+}
+
+// decodeClassBodyAtWithEnd decodes class body and reports end offset right after its payload.
+func (d *decodeContext) decodeClassBodyAtWithEnd(offset int) (decodedClassBody, int, error) {
+	return d.decodeClassBodyAtInternal(offset, true)
+}
+
+// decodeClassBodyAtInternal decodes class body with optional body-end capture.
+func (d *decodeContext) decodeClassBodyAtInternal(offset int, needEndOffset bool) (decodedClassBody, int, error) {
 	if cached, ok := d.bodyMemo[offset]; ok {
-		return cached, nil
+		return cached, 0, nil
 	}
 
 	if _, busy := d.bodyBusy[offset]; busy {
-		return decodedClassBody{}, fmt.Errorf("%w: recursive class body offset=%d", ErrInvalidRAP, offset)
+		return decodedClassBody{}, 0, fmt.Errorf("%w: recursive class body offset=%d", ErrInvalidRAP, offset)
 	}
 
 	d.bodyBusy[offset] = struct{}{}
@@ -213,31 +247,31 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 	}()
 
 	if err := d.reader.seekAbsolute(offset); err != nil {
-		return decodedClassBody{}, err
+		return decodedClassBody{}, 0, err
 	}
 
 	base, err := d.reader.readCString()
 	if err != nil {
-		return decodedClassBody{}, err
+		return decodedClassBody{}, 0, err
 	}
 
 	entryCount, err := d.reader.readCompressedInt()
 	if err != nil {
-		return decodedClassBody{}, err
+		return decodedClassBody{}, 0, err
 	}
 
 	statements := make([]rvcfg.Statement, 0, entryCount)
 	for i := range entryCount {
 		entryType, entryErr := d.reader.readByte()
 		if entryErr != nil {
-			return decodedClassBody{}, entryErr
+			return decodedClassBody{}, 0, entryErr
 		}
 
 		switch entryType {
 		case 0:
 			stmt, stmtErr := d.decodeClassEntry(i == entryCount-1)
 			if stmtErr != nil {
-				return decodedClassBody{}, stmtErr
+				return decodedClassBody{}, 0, stmtErr
 			}
 
 			statements = append(statements, stmt)
@@ -245,7 +279,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 		case 1:
 			stmt, stmtErr := d.decodeScalarEntry()
 			if stmtErr != nil {
-				return decodedClassBody{}, stmtErr
+				return decodedClassBody{}, 0, stmtErr
 			}
 
 			statements = append(statements, stmt)
@@ -253,7 +287,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 		case 2:
 			stmt, stmtErr := d.decodeArrayEntry(false)
 			if stmtErr != nil {
-				return decodedClassBody{}, stmtErr
+				return decodedClassBody{}, 0, stmtErr
 			}
 
 			statements = append(statements, stmt)
@@ -261,7 +295,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 		case 3:
 			name, nameErr := d.reader.readCString()
 			if nameErr != nil {
-				return decodedClassBody{}, nameErr
+				return decodedClassBody{}, 0, nameErr
 			}
 
 			statements = append(statements, rvcfg.Statement{
@@ -275,7 +309,7 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 		case 4:
 			name, nameErr := d.reader.readCString()
 			if nameErr != nil {
-				return decodedClassBody{}, nameErr
+				return decodedClassBody{}, 0, nameErr
 			}
 
 			statements = append(statements, rvcfg.Statement{
@@ -288,25 +322,28 @@ func (d *decodeContext) decodeClassBodyAt(offset int) (decodedClassBody, error) 
 		case 5:
 			stmt, stmtErr := d.decodeArrayEntry(true)
 			if stmtErr != nil {
-				return decodedClassBody{}, stmtErr
+				return decodedClassBody{}, 0, stmtErr
 			}
 
 			statements = append(statements, stmt)
 
 		default:
-			return decodedClassBody{}, fmt.Errorf("%w: unsupported entry type=%d", ErrInvalidRAP, entryType)
+			return decodedClassBody{}, 0, fmt.Errorf("%w: unsupported entry type=%d", ErrInvalidRAP, entryType)
 		}
 	}
 
 	out := decodedClassBody{
 		base:       base,
 		statements: statements,
-		endOffset:  d.reader.pos(),
 	}
 
 	d.bodyMemo[offset] = out
 
-	return out, nil
+	if !needEndOffset {
+		return out, 0, nil
+	}
+
+	return out, d.reader.pos(), nil
 }
 
 // decodeClassEntry decodes class entry type=0.
