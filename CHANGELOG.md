@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.3][] - 2026-02-27
+
+### Changed
+
+* Fixed `decodeClassBodyAtInternal` cache-path for `needEndOffset=true`.
+* Updated `rvcfg` dependency to `v0.1.1`
+
+[0.1.3]: https://github.com/WoozyMasta/rap/compare/v0.1.2...v0.1.3
+
 ## [0.1.2][] - 2026-02-25
 
 ### Changed
