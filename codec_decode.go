@@ -26,6 +26,7 @@ type decodeContext struct {
 type decodedClassBody struct {
 	base       string
 	statements []rvcfg.Statement
+	endOffset  int
 }
 
 // decodeFile decodes RAP bytes into rvcfg AST.
@@ -231,6 +232,10 @@ func (d *decodeContext) decodeClassBodyAtWithEnd(offset int) (decodedClassBody, 
 // decodeClassBodyAtInternal decodes class body with optional body-end capture.
 func (d *decodeContext) decodeClassBodyAtInternal(offset int, needEndOffset bool) (decodedClassBody, int, error) {
 	if cached, ok := d.bodyMemo[offset]; ok {
+		if needEndOffset {
+			return cached, cached.endOffset, nil
+		}
+
 		return cached, 0, nil
 	}
 
@@ -332,9 +337,11 @@ func (d *decodeContext) decodeClassBodyAtInternal(offset int, needEndOffset bool
 		}
 	}
 
+	endOffset := d.reader.pos()
 	out := decodedClassBody{
 		base:       base,
 		statements: statements,
+		endOffset:  endOffset,
 	}
 
 	d.bodyMemo[offset] = out
@@ -343,7 +350,7 @@ func (d *decodeContext) decodeClassBodyAtInternal(offset int, needEndOffset bool
 		return out, 0, nil
 	}
 
-	return out, d.reader.pos(), nil
+	return out, endOffset, nil
 }
 
 // decodeClassEntry decodes class entry type=0.
