@@ -48,6 +48,18 @@ if err != nil {
 bin, err := rap.EncodeAST(parsed.Processed.Parse.File, rap.EncodeOptions{})
 ```
 
+Encode RAP directly from in-memory source (`[]byte`):
+
+```go
+bin, err := rap.EncodeBytesWithDefaults(
+  "config.cpp",
+  []byte(`class CfgPatches { class TestMod { units[] = {}; }; };`),
+)
+if err != nil {
+  // handle
+}
+```
+
 Decode RAP to AST:
 
 ```go
@@ -67,6 +79,13 @@ text, err := rap.DecodeToText(data, rap.DecodeOptions{}, rap.RenderOptions{
     MaxLineWidth: 120,
   },
 })
+```
+
+Decode RAP from file path:
+
+```go
+file, err := rap.DecodeFile("config.bin", rap.DecodeOptions{})
+text, err := rap.DecodeFileToText("config.bin", rap.DecodeOptions{}, rap.RenderOptions{})
 ```
 
 ## Decode options

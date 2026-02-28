@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.4][] - 2026-02-28
+
+### Added
+
+* `DecodeFile` helper for decoding RAP payload from file path into AST.
+* `DecodeFileToText` helper for decoding RAP payload from file path into text.
+* `EncodeBytes` and `EncodeBytesWithDefaults` helpers for encoding RAP from
+  in-memory source bytes.
+
+[0.1.4]: https://github.com/WoozyMasta/rap/compare/v0.1.3...v0.1.4
+
 ## [0.1.3][] - 2026-02-27
 
 ### Changed
