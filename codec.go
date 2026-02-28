@@ -4,7 +4,12 @@
 
 package rap
 
-import "github.com/woozymasta/rvcfg"
+import (
+	"fmt"
+	"os"
+
+	"github.com/woozymasta/rvcfg"
+)
 
 // EnumEntry stores one RAP enum table item.
 type EnumEntry struct {
@@ -45,4 +50,14 @@ func DecodeToAST(data []byte, opts DecodeOptions) (rvcfg.File, error) {
 // DecodeToASTWithEnums decodes RAP payload and returns parsed enum table.
 func DecodeToASTWithEnums(data []byte, opts DecodeOptions) (rvcfg.File, []EnumEntry, error) {
 	return decodeFile(data, opts)
+}
+
+// DecodeFile reads RAP payload from file path and decodes it to config AST.
+func DecodeFile(path string, opts DecodeOptions) (rvcfg.File, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return rvcfg.File{}, fmt.Errorf("%w: %s: %w", ErrReadRAPFile, path, err)
+	}
+
+	return DecodeToAST(data, opts)
 }

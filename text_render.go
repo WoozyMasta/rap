@@ -6,6 +6,7 @@ package rap
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -38,6 +39,16 @@ func DecodeToText(data []byte, decodeOpts DecodeOptions, renderOpts RenderOption
 	}
 
 	return rvcfg.FormatWithOptions(raw, renderOpts.Format)
+}
+
+// DecodeFileToText reads RAP payload from file path and decodes it to text.
+func DecodeFileToText(path string, decodeOpts DecodeOptions, renderOpts RenderOptions) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %w", ErrReadRAPFile, path, err)
+	}
+
+	return DecodeToText(data, decodeOpts, renderOpts)
 }
 
 // synthEnumStatement converts RAP enum table into synthetic enum statement.

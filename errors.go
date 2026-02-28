@@ -15,4 +15,10 @@ var (
 
 	// ErrUnsupportedScalar indicates scalar cannot be represented by v0 RAP scalar subtypes.
 	ErrUnsupportedScalar = errors.New("unsupported scalar")
+
+	// ErrReadRAPFile indicates failure while reading RAP payload from file path.
+	ErrReadRAPFile = errors.New("read rap file failed")
+
+	// ErrParseSource indicates failure while parsing source text before RAP encoding.
+	ErrParseSource = errors.New("parse source failed")
 )

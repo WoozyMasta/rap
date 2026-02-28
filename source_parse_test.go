@@ -1,6 +1,7 @@
 package rap
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,5 +90,38 @@ class CfgExecEval
 
 	if prop.Value.Raw != "12" {
 		t.Fatalf("expected value=12 after exec/eval, got %q", prop.Value.Raw)
+	}
+}
+
+func TestEncodeBytesWithDefaults(t *testing.T) {
+	t.Parallel()
+
+	source := []byte(`class CfgPatches { class TestMod { units[] = {}; }; };`)
+	data, err := EncodeBytesWithDefaults("mod.cpp", source)
+	if err != nil {
+		t.Fatalf("EncodeBytesWithDefaults() error: %v", err)
+	}
+	if len(data) == 0 {
+		t.Fatal("EncodeBytesWithDefaults() returned empty payload")
+	}
+
+	file, err := DecodeToAST(data, DecodeOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToAST() error: %v", err)
+	}
+	if len(file.Statements) == 0 {
+		t.Fatal("DecodeToAST() returned empty AST")
+	}
+}
+
+func TestEncodeBytes_InvalidSource(t *testing.T) {
+	t.Parallel()
+
+	_, err := EncodeBytesWithDefaults("broken.cpp", []byte(`class Broken {`))
+	if err == nil {
+		t.Fatal("EncodeBytesWithDefaults() error=nil, want parse error")
+	}
+	if !errors.Is(err, ErrParseSource) {
+		t.Fatalf("EncodeBytesWithDefaults() error=%v, want ErrParseSource", err)
 	}
 }

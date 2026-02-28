@@ -4,7 +4,11 @@
 
 package rap
 
-import "github.com/woozymasta/rvcfg"
+import (
+	"fmt"
+
+	"github.com/woozymasta/rvcfg"
+)
 
 // SourceParseOptions configures text source parse pipeline delegated to rvcfg.
 type SourceParseOptions struct {
@@ -62,4 +66,26 @@ func ParseSourceFile(path string, opts SourceParseOptions) (SourceParseResult, e
 	}
 
 	return result, nil
+}
+
+// EncodeBytesWithDefaults parses raw source bytes with recommended parse options
+// and encodes them to RAP binary payload.
+func EncodeBytesWithDefaults(filename string, source []byte) ([]byte, error) {
+	return EncodeBytes(filename, source, RecommendedSourceParseOptions().Parse, EncodeOptions{})
+}
+
+// EncodeBytes parses raw source bytes (without preprocess stage) and encodes
+// them to RAP binary payload.
+func EncodeBytes(
+	filename string,
+	source []byte,
+	parseOptions rvcfg.ParseOptions,
+	encodeOptions EncodeOptions,
+) ([]byte, error) {
+	parsed, err := rvcfg.ParseBytes(filename, source, parseOptions)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %w", ErrParseSource, filename, err)
+	}
+
+	return EncodeAST(parsed.File, encodeOptions)
 }

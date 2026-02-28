@@ -12,6 +12,8 @@ Typical flow:
   - parse source text with ParseSourceFile
   - encode parsed AST with EncodeAST
   - decode RAP payload with DecodeToAST or DecodeToText
+  - or encode in-memory source directly with EncodeBytes
+  - or decode from file with DecodeFile / DecodeFileToText
 
 Minimal flow example:
 

@@ -3,6 +3,7 @@ package rap
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -481,5 +482,51 @@ func TestEncodeDecode_Int64ScalarSubtype(t *testing.T) {
 
 	if got.Property.Value.Raw != "10000000000" {
 		t.Fatalf("expected decoded raw int64 scalar, got=%q", got.Property.Value.Raw)
+	}
+}
+
+func TestDecodeFile_ASTAndText(t *testing.T) {
+	t.Parallel()
+
+	source := []byte(`class CfgPatches { class TestMod { units[] = {}; }; };`)
+	bin, err := EncodeBytesWithDefaults("config.cpp", source)
+	if err != nil {
+		t.Fatalf("EncodeBytesWithDefaults() error: %v", err)
+	}
+
+	path := filepath.Join(t.TempDir(), "config.bin")
+	if err := os.WriteFile(path, bin, 0o600); err != nil {
+		t.Fatalf("write RAP temp file: %v", err)
+	}
+
+	file, err := DecodeFile(path, DecodeOptions{})
+	if err != nil {
+		t.Fatalf("DecodeFile() error: %v", err)
+	}
+	if len(file.Statements) == 0 {
+		t.Fatal("DecodeFile() returned empty AST")
+	}
+
+	text, err := DecodeFileToText(path, DecodeOptions{}, RenderOptions{})
+	if err != nil {
+		t.Fatalf("DecodeFileToText() error: %v", err)
+	}
+	if !strings.Contains(string(text), "class CfgPatches") {
+		t.Fatalf("DecodeFileToText() unexpected output: %q", string(text))
+	}
+}
+
+func TestDecodeFile_MissingFile(t *testing.T) {
+	t.Parallel()
+
+	_, err := DecodeFile(filepath.Join(t.TempDir(), "missing.bin"), DecodeOptions{})
+	if err == nil {
+		t.Fatal("DecodeFile() error=nil, want file read error")
+	}
+	if !errors.Is(err, ErrReadRAPFile) {
+		t.Fatalf("DecodeFile() error=%v, want ErrReadRAPFile", err)
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("DecodeFile() error=%v, want os.ErrNotExist cause", err)
 	}
 }
