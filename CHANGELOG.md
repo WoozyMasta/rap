@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.5][] - 2026-03-17
+
+### Changed
+
+* Updated `rvcfg` dependency to `v0.2.0`.
+* Improved raP encode benchmark paths
+  (`EncodeConfigAST`, `EncodeConfigBinDecodedAST`)
+  with lower allocation pressure and faster runtime versus baseline.
+
+[0.1.5]: https://github.com/WoozyMasta/rap/compare/v0.1.4...v0.1.5
+
 ## [0.1.4][] - 2026-02-28
 
 ### Added
