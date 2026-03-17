@@ -7,6 +7,7 @@ package rap
 import (
 	"encoding/binary"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -18,7 +19,7 @@ type encodeContext struct {
 	writer             *binaryWriter
 	enumOffsetRefPatch []int
 	tailForwardLinks   []tailForwardLink
-	resolvedTailPatch  map[int]struct{}
+	resolvedTailPatch  []int
 	lastRaw            string
 	lastClass          cachedScalarClass
 	lastValid          bool
@@ -53,7 +54,7 @@ func encodeFile(file rvcfg.File, opts EncodeOptions) ([]byte, error) {
 		writer:             newBinaryWriterWithCapacity(estimateFileBinarySize(preparedFile, enums)),
 		enumOffsetRefPatch: make([]int, 0, 32),
 		tailForwardLinks:   make([]tailForwardLink, 0, 32),
-		resolvedTailPatch:  make(map[int]struct{}, 64),
+		resolvedTailPatch:  make([]int, 0, 32),
 	}
 
 	ctx.writer.buf = append(ctx.writer.buf, rapSignature[:]...)
@@ -78,8 +79,10 @@ func encodeFile(file rvcfg.File, opts EncodeOptions) ([]byte, error) {
 		return nil, err
 	}
 
+	sort.Ints(ctx.resolvedTailPatch)
+
 	for _, patchAt := range ctx.enumOffsetRefPatch {
-		if _, ok := ctx.resolvedTailPatch[patchAt]; ok {
+		if isResolvedPatch(ctx.resolvedTailPatch, patchAt) {
 			continue
 		}
 
@@ -424,9 +427,15 @@ func (e *encodeContext) patchTailTarget(patchAt int, target int) error {
 		return err
 	}
 
-	e.resolvedTailPatch[patchAt] = struct{}{}
+	e.resolvedTailPatch = append(e.resolvedTailPatch, patchAt)
 
 	return nil
+}
+
+// isResolvedPatch reports whether sorted list contains patch offset.
+func isResolvedPatch(sorted []int, patchAt int) bool {
+	index := sort.SearchInts(sorted, patchAt)
+	return index < len(sorted) && sorted[index] == patchAt
 }
 
 // hasClassOnlyBody reports whether all statements in body are class declarations.

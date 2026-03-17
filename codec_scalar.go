@@ -12,6 +12,10 @@ import (
 
 // quoteRVCfgString wraps source string into config-like quoted scalar.
 func quoteRVCfgString(value string) string {
+	if !strings.Contains(value, `"`) {
+		return `"` + value + `"`
+	}
+
 	escaped := strings.ReplaceAll(value, `"`, `\"`)
 
 	return `"` + escaped + `"`
@@ -25,6 +29,10 @@ func unquoteRVCfgString(raw string) (string, bool) {
 	}
 
 	body := trimmed[1 : len(trimmed)-1]
+	if !strings.Contains(body, `\"`) {
+		return body, true
+	}
+
 	body = strings.ReplaceAll(body, `\"`, `"`)
 
 	return body, true
