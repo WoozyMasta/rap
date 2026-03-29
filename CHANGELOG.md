@@ -13,6 +13,18 @@ and this project adheres to [Semantic Versioning][].
 ### Removed
 -->
 
+## [0.1.6][] - 2026-03-29
+
+### Changed
+
+* Updated `rvcfg` dependency to `v0.3.0`.
+
+### Fixed
+
+* Fixed RAP decode for payloads with backslash before doubled quotes.
+
+[0.1.6]: https://github.com/WoozyMasta/rap/compare/v0.1.5...v0.1.6
+
 ## [0.1.5][] - 2026-03-17
 
 ### Changed
