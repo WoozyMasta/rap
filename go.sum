@@ -1,2 +1,6 @@
-github.com/woozymasta/rvcfg v0.2.0 h1:b+WXU+svN1dGkTv8F4FL9l/abdbmZ9mfbA7ko6UfLTs=
-github.com/woozymasta/rvcfg v0.2.0/go.mod h1:rZTkW1wBq+Jxy6jCTUi2QOB5InKcqGbIv08/Es7i1dg=
+github.com/woozymasta/lintkit v0.2.2 h1:ILTQ4sTf2UvTQ7567ROmv+4ZuJB+1VmKtikOWAP0tIU=
+github.com/woozymasta/lintkit v0.2.2/go.mod h1:VKGsQVFUdIW9XYxHA3WJPHOKSGIGJ9O+S4vFb/nBd/k=
+github.com/woozymasta/pathrules v0.1.2 h1:RXETYaAaADfyJEJkbMVUaVcmPkbtpALWwXClO6Ssvtc=
+github.com/woozymasta/pathrules v0.1.2/go.mod h1:80PI6so6HaHEs1JKqYjI50NH/IUediJkdygKIfMbuIc=
+github.com/woozymasta/rvcfg v0.3.0 h1:1/TkLNWOks0uWGzxIQYAqJ5EPx9kfbqtV0whPpG4qHc=
+github.com/woozymasta/rvcfg v0.3.0/go.mod h1:atDbJnnFwke5rLJLzACpvazEM7KML8WPaxlXoJmkaqg=
