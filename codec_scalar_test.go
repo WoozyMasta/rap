@@ -49,3 +49,59 @@ func TestFormatFloat32RawVerbose(t *testing.T) {
 		t.Fatalf("formatFloat32RawVerbose(1.0) = %q; want %q", got, "1.0")
 	}
 }
+
+func TestQuoteRVCfgString_BIStyleEscaping(t *testing.T) {
+	t.Parallel()
+
+	input := `this animationPhase "shutter1" < 0.5 && damage this < 1`
+	want := `"this animationPhase ""shutter1"" < 0.5 && damage this < 1"`
+	got := quoteRVCfgString(input)
+	if got != want {
+		t.Fatalf("quoteRVCfgString(%q) = %q; want %q", input, got, want)
+	}
+}
+
+func TestUnquoteRVCfgString_BIStyleEscaping(t *testing.T) {
+	t.Parallel()
+
+	raw := `"this animationPhase ""shutter1"" < 0.5 && damage this < 1"`
+	want := `this animationPhase "shutter1" < 0.5 && damage this < 1`
+	got, ok := unquoteRVCfgString(raw)
+	if !ok {
+		t.Fatalf("unquoteRVCfgString(%q) unexpectedly failed", raw)
+	}
+
+	if got != want {
+		t.Fatalf("unquoteRVCfgString(%q) = %q; want %q", raw, got, want)
+	}
+}
+
+func TestUnquoteRVCfgString_LegacyBackslashEscaping(t *testing.T) {
+	t.Parallel()
+
+	raw := `"this animationPhase \"shutter1\" < 0.5 && damage this < 1"`
+	want := `this animationPhase "shutter1" < 0.5 && damage this < 1`
+	got, ok := unquoteRVCfgString(raw)
+	if !ok {
+		t.Fatalf("unquoteRVCfgString(%q) unexpectedly failed", raw)
+	}
+
+	if got != want {
+		t.Fatalf("unquoteRVCfgString(%q) = %q; want %q", raw, got, want)
+	}
+}
+
+func TestQuoteUnquoteRVCfgString_ConsumablesPattern(t *testing.T) {
+	t.Parallel()
+
+	raw := `"DZ\gear\consumables\data\"""".rvmat"`
+	unquoted, ok := unquoteRVCfgString(raw)
+	if !ok {
+		t.Fatalf("unquoteRVCfgString(%q) unexpectedly failed", raw)
+	}
+
+	quoted := quoteRVCfgString(unquoted)
+	if quoted != raw {
+		t.Fatalf("quoteRVCfgString(unquoteRVCfgString(%q)) = %q; want %q", raw, quoted, raw)
+	}
+}

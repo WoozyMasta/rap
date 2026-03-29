@@ -112,3 +112,36 @@ func TestDecodeToText_EmitEnumBlock(t *testing.T) {
 		t.Fatalf("expected synthetic enum block, got:\n%s", out)
 	}
 }
+
+func TestDecodeToText_BIStyleStringEscaping(t *testing.T) {
+	t.Parallel()
+
+	file := rvcfg.File{
+		Statements: []rvcfg.Statement{
+			{
+				Kind: rvcfg.NodeProperty,
+				Property: &rvcfg.PropertyAssign{
+					Name: "onExecute",
+					Value: rvcfg.Value{
+						Kind: rvcfg.ValueScalar,
+						Raw:  `"textLog ""%1"""`,
+					},
+				},
+			},
+		},
+	}
+
+	data, err := EncodeAST(file, EncodeOptions{})
+	if err != nil {
+		t.Fatalf("EncodeAST() error: %v", err)
+	}
+
+	text, err := DecodeToText(data, DecodeOptions{}, RenderOptions{})
+	if err != nil {
+		t.Fatalf("DecodeToText() error: %v", err)
+	}
+
+	if !strings.Contains(string(text), `onExecute = "textLog ""%1""";`) {
+		t.Fatalf("expected BI-style string escaping, got:\n%s", string(text))
+	}
+}

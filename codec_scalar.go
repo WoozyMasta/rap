@@ -12,11 +12,7 @@ import (
 
 // quoteRVCfgString wraps source string into config-like quoted scalar.
 func quoteRVCfgString(value string) string {
-	if !strings.Contains(value, `"`) {
-		return `"` + value + `"`
-	}
-
-	escaped := strings.ReplaceAll(value, `"`, `\"`)
+	escaped := strings.ReplaceAll(value, `"`, `""`)
 
 	return `"` + escaped + `"`
 }
@@ -29,13 +25,39 @@ func unquoteRVCfgString(raw string) (string, bool) {
 	}
 
 	body := trimmed[1 : len(trimmed)-1]
-	if !strings.Contains(body, `\"`) {
-		return body, true
+	if body == "" {
+		return "", true
 	}
 
-	body = strings.ReplaceAll(body, `\"`, `"`)
+	var builder strings.Builder
+	builder.Grow(len(body))
 
-	return body, true
+	for index := 0; index < len(body); index++ {
+		char := body[index]
+
+		if char == '"' {
+			if index+1 < len(body) && body[index+1] == '"' {
+				builder.WriteByte('"')
+				index++
+				continue
+			}
+			return "", false
+		}
+
+		// Keep legacy compatibility for older rap outputs that used \" escapes.
+		// BI-style data can contain backslash before doubled quotes (\ + "").
+		// In that case slash is literal and quote-pairs should be decoded by BI path.
+		if char == '\\' && index+1 < len(body) && body[index+1] == '"' &&
+			(index+2 >= len(body) || body[index+2] != '"') {
+			builder.WriteByte('"')
+			index++
+			continue
+		}
+
+		builder.WriteByte(char)
+	}
+
+	return builder.String(), true
 }
 
 // formatFloat32RawVerbose formats float in verbose fixed style (CfgConvert-like).
